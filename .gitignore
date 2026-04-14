@@ -40,3 +40,9 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+
+### Project-local docs ###
+CLAUDE.md
+PLAN.md
+PROGRESS.md
+docs/

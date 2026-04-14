@@ -1,28 +1,45 @@
-<!-- Plugin Configuration File: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
-    <!-- Unique identifier of the plugin. It should be FQN, cannot be changed between the plugin versions. -->
     <id>io.github.overtake.semantic-bridge-plugin</id>
-
-    <!-- Public plugin name should be written in Title Case.
-         Guidelines: https://plugins.jetbrains.com/docs/marketplace/best-practices-for-listing.html#plugin-name -->
     <name>Semantic Bridge</name>
+    <vendor>Milos</vendor>
 
-    <!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
-    <vendor url="https://www.yourcompany.com">YourCompany</vendor>
-
-    <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
-         Guidelines: https://plugins.jetbrains.com/docs/marketplace/best-practices-for-listing.html#plugin-description -->
     <description><![CDATA[
-        Enter short description for your plugin here.<br>
-        <em>most HTML tags may be used</em>
+        Explains the architectural role of Java classes using IDE semantic analysis and LLM.
+        Right-click any class to see its type hierarchy, callers, implementations, and
+        test associations analyzed and explained by an AI.
     ]]></description>
 
-    <!-- Product and plugin compatibility requirements.
-         Read more: https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html -->
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.java</depends>
 
-    <depends>org.jetbrains.kotlin</depends>
-    <!-- Extensions defined by the plugin.
-         Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
     <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="Semantic Bridge"
+                    factoryClass="io.github.overtake.semanticbridge.ui.ExplanationToolWindowFactory"
+                    anchor="right"
+                    secondary="true"
+                    icon="AllIcons.Actions.Preview"/>
+
+        <applicationConfigurable
+            instance="io.github.overtake.semanticbridge.settings.PluginSettingsConfigurable"
+            displayName="Semantic Bridge"
+            parentId="tools"/>
+
+        <applicationService
+            serviceImplementation="io.github.overtake.semanticbridge.settings.PluginSettings"/>
+
+        <notificationGroup id="SemanticBridge.Notifications"
+                           displayType="BALLOON"
+                           toolWindowId="Semantic Bridge"/>
     </extensions>
+
+    <actions>
+        <action id="SemanticBridge.ExplainArchitecture"
+                class="io.github.overtake.semanticbridge.action.ExplainArchitectureAction"
+                text="Explain Architecture"
+                description="Generate an AI-powered architecture explanation using IDE semantic context"
+                icon="AllIcons.Actions.Preview">
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </action>
+    </actions>
 </idea-plugin>

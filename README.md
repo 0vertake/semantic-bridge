@@ -1,117 +1,95 @@
-# IntelliJ Platform Plugin Template
+# Semantic Bridge
 
-[![Twitter Follow](https://img.shields.io/badge/follow-%40JBPlatform-1DA1F2?logo=twitter)](https://twitter.com/JBPlatform)
-[![Developers Forum](https://img.shields.io/badge/JetBrains%20Platform-Join-blue)][jb:forum]
+An IntelliJ IDEA plugin that explains the architectural role of Java classes by combining the IDE's deep semantic analysis with LLM-powered natural language generation.
 
-## Plugin template structure
+## What it does
 
-A generated project contains the following content structure:
+Right-click any Java class in the project tree or editor and select **Explain Architecture**. The plugin:
+
+1. **Extracts semantic context via PSI** -- resolved type hierarchies, caller/callee relationships, interface implementations, constructor dependencies, and test associations. This is structural knowledge that only the IDE's program analysis engine can provide; a file-reading agent cannot reconstruct it.
+2. **Sends the structured context to an LLM** (any OpenAI-compatible API) for architectural explanation.
+3. **Displays the result** in a tool window with streaming output, history, and copy-to-clipboard.
+
+![semantic_bridge_demo](https://github.com/user-attachments/assets/2924990e-b3d0-4d0a-ae4d-b3f197cee0d6)
+
+## Why PSI matters
+
+A text-based agent reading source files can see that `UserService extends BaseService`. The IDE *knows* that `BaseService` implements `Cacheable`, that `UserService` is referenced by 12 other classes across 3 modules, that its constructor takes a `UserRepository` (dependency injection), and that `UserServiceTest` exists in the test source root. This plugin turns that structured knowledge into context an LLM can reason about.
+
+## Quick Start (5 minutes)
+
+The fastest way to try the plugin is with **Groq**, which offers a free API with no credit card required.
+
+1. **Get a Groq API key** -- go to [console.groq.com](https://console.groq.com/), sign in with Google/GitHub, and create an API key from the dashboard. It's instant and free.
+
+2. **Launch the sandbox IDE:**
+   ```bash
+   ./gradlew runIde
+   ```
+
+3. **Configure the plugin** -- in the sandbox IDE, go to **Settings > Tools > Semantic Bridge**. The model defaults to Llama 3.3 70B on Groq. Paste your Groq API key into the Groq field and click OK.
+
+4. **Open any Java project** in the sandbox IDE (or use the IDE's sample projects).
+
+5. **Right-click a Java class** in the project tree or editor and select **Explain Architecture**. The Semantic Bridge tool window will open on the right and stream the LLM's architectural explanation.
+
+> Other supported providers: **OpenAI** ([platform.openai.com/api-keys](https://platform.openai.com/api-keys)) and **OpenRouter** ([openrouter.ai/keys](https://openrouter.ai/keys)). Select a different model from the dropdown and enter the corresponding provider's API key.
+
+## Build & Run
+
+```bash
+./gradlew build          # compile + tests
+./gradlew test           # tests only
+./gradlew runIde         # launch sandbox IDE with plugin loaded
+./gradlew buildPlugin    # produce installable zip in build/distributions/
+```
+
+**Requirements:** JDK 21, IntelliJ IDEA 2025.2+.
+
+## Architecture
 
 ```
-.
-├── .run/                   Predefined Run/Debug Configurations
-├── build/                  Output build directory
-├── gradle
-│   ├── wrapper/            Gradle Wrapper
-├── src                     Plugin sources
-│   ├── main
-│   │   ├── kotlin/         Kotlin production sources
-│   │   └── resources/      Resources - plugin.xml, icons, messages
-├── .gitignore              Git ignoring rules
-├── build.gradle.kts        Gradle build configuration
-├── gradle.properties       Gradle configuration properties
-├── gradlew                 *nix Gradle Wrapper script
-├── gradlew.bat             Windows Gradle Wrapper script
-├── README.md               README
-└── settings.gradle.kts     Gradle project settings
+action/         Entry point -- AnAction registered in context menus
+collector/      PSI-based context extraction (ClassContextCollector)
+model/          Data classes for semantic context (ClassContext, MethodInfo, etc.)
+llm/            LLM HTTP client (SSE streaming) and prompt construction
+ui/             Tool window, JCEF browser panel with marked.js rendering
+settings/       Persistent settings with secure API key storage (PasswordSafe)
 ```
 
-In addition to the configuration files, the most crucial part is the `src` directory, which contains our implementation
-and the manifest for our plugin – [plugin.xml][file:plugin.xml].
+The plugin follows the IntelliJ platform threading model:
+- PSI access runs on a background thread inside `ReadAction.nonBlocking { }.inSmartMode(project)`
+- LLM streaming runs on a background thread with cancellation support
+- All UI updates are posted to EDT via `invokeLater`
+- Rendering uses JCEF (embedded Chromium) with JS-side `requestAnimationFrame` pacing
 
-> [!NOTE]
-> To use Java in your plugin, create the `/src/main/java` directory.
+## Planned features
 
-## Plugin configuration file
+Planned features that extend the plugin's PSI-powered analysis, roughly ordered by impact:
 
-The plugin configuration file is a [plugin.xml][file:plugin.xml] file located in the `src/main/resources/META-INF`
-directory.
-It provides general information about the plugin, its dependencies, extensions, and listeners.
+**Package Explainer** -- Right-click a package to get an architectural overview: all classes and their roles, inter-class dependencies, public API surface vs internal classes, and which other packages depend on it. The LLM synthesizes this into a narrative like "this is your service layer; it depends on the repository layer and is consumed by the controller layer."
 
-You can read more about this file in the [Plugin Configuration File][docs:plugin.xml] section of our documentation.
+**Change Impact Analyzer** -- Select a class and see its blast radius: "if you modify this class, these 14 classes are affected, across 3 modules." Uses `ReferencesSearch` to walk the call graph outward. This is something a text-based agent fundamentally cannot do -- it requires resolved cross-references, not string matching.
 
-If you're still not quite sure what this is all about, read our
-introduction: [What is the IntelliJ Platform?][docs:intro]
+**Endpoint Tracer** -- Right-click a Spring `@RestController` method and trace the full request path: controller -> service -> repository -> entity. PSI resolves the entire call chain; the LLM explains the business flow.
 
-$H$H Predefined Run/Debug configurations
+**Module Explainer** -- Like package explainer but at the Gradle/Maven module level. Uses `ModuleManager` to surface module dependencies, source roots, and API vs implementation boundaries.
 
-Within the default project structure, there is a `.run` directory provided containing predefined *Run/Debug
-configurations* that expose corresponding Gradle tasks:
+**Kotlin/UAST Support** -- Replace Java-specific PSI calls with UAST (Unified Abstract Syntax Tree) to support Kotlin, Scala, and Groovy analysis with the same codebase.
 
-| Configuration name | Description                                                                                                                                                                         |
-|--------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Run Plugin         | Runs [`:runIde`][gh:intellij-platform-gradle-plugin-runIde] IntelliJ Platform Gradle Plugin task. Use the *Debug* icon for plugin debugging.                                        |
-| Run Tests          | Runs [`:test`][gradle:lifecycle-tasks] Gradle task.                                                                                                                                 |
-| Run Verifications  | Runs [`:verifyPlugin`][gh:intellij-platform-gradle-plugin-verifyPlugin] IntelliJ Platform Gradle Plugin task to check the plugin compatibility against the specified IntelliJ IDEs. |
+**Comparative Explainer** -- Select two classes and get a side-by-side comparison: how they differ, when to use which, and whether they should be refactored into a shared abstraction.
 
-> [!NOTE]
-> You can find the logs from the running task in the `idea.log` tab.
+## Scope & Limitations
 
-## Publishing the plugin
+- **v1 supports Java source analysis only.** Kotlin, Scala, and Groovy support via UAST is a planned extension.
+- Package-level and module-level analysis are planned stretch goals.
+- Results are not cached between sessions.
 
-> [!TIP]
-> Make sure to follow all guidelines listed in [Publishing a Plugin][docs:publishing] to follow all recommended and
-> required steps.
+## Tech Stack
 
-Releasing a plugin to [JetBrains Marketplace](https://plugins.jetbrains.com) is a straightforward operation that uses
-the `publishPlugin` Gradle task provided by
-the [intellij-platform-gradle-plugin][gh:intellij-platform-gradle-plugin-docs].
-
-You can also upload the plugin to the [JetBrains Plugin Repository](https://plugins.jetbrains.com/plugin/upload)
-manually via UI.
-
-## Useful links
-
-- [IntelliJ Platform SDK Plugin SDK][docs]
-- [IntelliJ Platform Gradle Plugin Documentation][gh:intellij-platform-gradle-plugin-docs]
-- [IntelliJ Platform Explorer][jb:ipe]
-- [JetBrains Marketplace Quality Guidelines][jb:quality-guidelines]
-- [IntelliJ Platform UI Guidelines][jb:ui-guidelines]
-- [JetBrains Marketplace Paid Plugins][jb:paid-plugins]
-- [IntelliJ SDK Code Samples][gh:code-samples]
-
-[docs]: https://plugins.jetbrains.com/docs/intellij
-
-[docs:intro]: https://plugins.jetbrains.com/docs/intellij/intellij-platform.html?from=IJPluginTemplate
-
-[docs:plugin.xml]: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html?from=IJPluginTemplate
-
-[docs:publishing]: https://plugins.jetbrains.com/docs/intellij/publishing-plugin.html?from=IJPluginTemplate
-
-[file:plugin.xml]: ./src/main/resources/META-INF/plugin.xml
-
-[gh:code-samples]: https://github.com/JetBrains/intellij-sdk-code-samples
-
-[gh:intellij-platform-gradle-plugin]: https://github.com/JetBrains/intellij-platform-gradle-plugin
-
-[gh:intellij-platform-gradle-plugin-docs]: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html
-
-[gh:intellij-platform-gradle-plugin-runIde]: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-tasks.html#runIde
-
-[gh:intellij-platform-gradle-plugin-verifyPlugin]: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-tasks.html#verifyPlugin
-
-[gradle:lifecycle-tasks]: https://docs.gradle.org/current/userguide/java_plugin.html#lifecycle_tasks
-
-[jb:github]: https://github.com/JetBrains/.github/blob/main/profile/README.md
-
-[jb:forum]: https://platform.jetbrains.com/
-
-[jb:quality-guidelines]: https://plugins.jetbrains.com/docs/marketplace/quality-guidelines.html
-
-[jb:paid-plugins]: https://plugins.jetbrains.com/docs/marketplace/paid-plugins-marketplace.html
-
-[jb:quality-guidelines]: https://plugins.jetbrains.com/docs/marketplace/quality-guidelines.html
-
-[jb:ipe]: https://jb.gg/ipe
-
-[jb:ui-guidelines]: https://jetbrains.github.io/ui
+- Kotlin 2.1.20
+- IntelliJ Platform SDK (2025.2)
+- JCEF (embedded Chromium) with marked.js for markdown rendering
+- `java.net.http.HttpClient` for LLM API calls (no external HTTP libraries)
+- `org.json` for JSON serialization
+- JUnit 4 for testing
