@@ -20,11 +20,12 @@ dependencies {
         intellijIdea("2025.2.4")
         testFramework(org.jetbrains.intellij.platform.gradle.TestFrameworkType.Platform)
 
-        // Add plugin dependencies for compilation here:
-
-
         bundledPlugin("org.jetbrains.kotlin")
+        bundledPlugin("com.intellij.java")
     }
+
+    implementation("org.json:json:20240303")
+    testImplementation("junit:junit:4.13.2")
 }
 
 intellijPlatform {
