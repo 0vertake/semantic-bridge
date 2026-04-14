@@ -10,6 +10,8 @@ Right-click any Java class in the project tree or editor and select **Explain Ar
 2. **Sends the structured context to an LLM** (any OpenAI-compatible API) for architectural explanation.
 3. **Displays the result** in a tool window with streaming output, history, and copy-to-clipboard.
 
+![semantic_bridge_demo](https://github.com/user-attachments/assets/2924990e-b3d0-4d0a-ae4d-b3f197cee0d6)
+
 ## Why PSI matters
 
 A text-based agent reading source files can see that `UserService extends BaseService`. The IDE *knows* that `BaseService` implements `Cacheable`, that `UserService` is referenced by 12 other classes across 3 modules, that its constructor takes a `UserRepository` (dependency injection), and that `UserServiceTest` exists in the test source root. This plugin turns that structured knowledge into context an LLM can reason about.
